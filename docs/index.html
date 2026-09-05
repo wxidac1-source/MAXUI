@@ -1,1 +1,122 @@
-<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>魔法相机 MAXUI 源</title></head><body style="font-family:-apple-system,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;line-height:1.7"><h2>魔法相机 MAXUI · 越狱软件源</h2><p>这是一个 APT/Sileo 软件源地址，请在 <b>Sileo → 软件源 → + → 添加源</b> 中粘贴本页网址，不要用普通浏览器打开安装。</p><p>当前包：com.maxui.tweak (1.0.1)</p></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0c0f14">
+<title>魔法相机 MAXUI · 越狱软件源</title>
+<style>
+  :root{--bg:#0c0f14;--card:#161b24;--line:#26303d;--cy:#27e0d4;--tx:#e8edf3;--mut:#9aa7b5;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--tx);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+    line-height:1.75;font-size:17px;padding-bottom:60px}
+  .wrap{max-width:680px;margin:0 auto;padding:0 18px}
+  .hero{text-align:center;padding:34px 0 18px}
+  .logo{width:84px;height:84px;border-radius:20px;box-shadow:0 8px 30px rgba(39,224,212,.25)}
+  h1{font-size:24px;margin:14px 0 4px}
+  .sub{color:var(--mut);font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin:16px 0}
+  .src{display:flex;align-items:center;gap:8px;background:#0a0d12;border:1px solid var(--line);
+    border-radius:12px;padding:12px 14px;font-size:14px;word-break:break-all;margin:10px 0;font-family:ui-monospace,Menlo,monospace}
+  button,.btn{appearance:none;border:0;cursor:pointer;font-size:17px;font-weight:600;border-radius:13px;
+    padding:15px 18px;width:100%;margin:8px 0;display:block;text-align:center;text-decoration:none}
+  .primary{background:linear-gradient(135deg,#27e0d4,#19b6c9);color:#04201f;box-shadow:0 6px 20px rgba(39,224,212,.3)}
+  .ghost{background:#0a0d12;color:var(--tx);border:1px solid var(--line)}
+  h2{font-size:18px;margin:4px 0 10px;display:flex;align-items:center;gap:8px}
+  .n{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--cy);color:#04201f;
+    align-items:center;justify-content:center;font-size:15px;font-weight:700;flex:0 0 auto}
+  ol{margin:6px 0;padding-left:0;list-style:none;counter-reset:s}
+  ol li{margin:10px 0;padding-left:0}
+  .tap{color:var(--cy);font-weight:600}
+  .mut{color:var(--mut);font-size:14px}
+  details{background:#0a0d12;border:1px solid var(--line);border-radius:12px;padding:0 14px;margin:10px 0}
+  summary{padding:13px 0;font-weight:600;cursor:pointer}
+  details p,details li{font-size:15px;color:var(--mut)}
+  code{background:#0a0d12;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:14px;
+    font-family:ui-monospace,Menlo,monospace;color:var(--cy);word-break:break-all}
+  .ok{color:#3ddc84;font-weight:600}
+  .warn{color:#ffcf5c}
+  .step-pos{color:var(--mut);font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <img class="logo" src="icon.png" alt="MAXUI">
+    <h1>魔法相机 MAXUI</h1>
+    <div class="sub">iOS 15–16 · Dopamine / palera1n rootless · 虚拟相机 · v1.0.1</div>
+  </div>
+
+  <div class="card">
+    <h2>软件源地址</h2>
+    <div class="src" id="src">https://wxidac1-source.github.io/MAXUI/</div>
+    <button class="ghost" onclick="copySrc()">复制源地址</button>
+    <a class="btn primary" href="sileo://source/https://wxidac1-source.github.io/MAXUI/">一键添加到 Sileo</a>
+    <div class="mut" style="text-align:center;margin-top:6px">在 iPhone 的 Safari 打开本页，点上面蓝色按钮即可自动跳转 Sileo 添加，无需手打。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">1</span>添加软件源</h2>
+    <ol>
+      <li><span class="tap">方式 A（最省事）</span>：用 iPhone 自带 <b>Safari</b> 打开本页，点上方蓝色「<b>一键添加到 Sileo</b>」→ 弹出「在 Sileo 中打开？」点<span class="tap">打开</span> → 跳到 Sileo 后点右上角<span class="tap">「添加源 / Add Source」</span>，完成后跳到方式 3。</li>
+      <li><span class="tap">方式 B（手动）</span>：打开 <b>Sileo</b> → 点底部第 4 个标签<span class="tap">「软件源 / Sources」</span>（地球图标）。</li>
+      <li>点右上角<span class="tap">「＋」</span> → 在输入框<span class="step-pos">（弹窗顶部长条）</span>粘贴源地址 → 点<span class="tap">「添加源 / Add Source」</span>。</li>
+      <li>等待顶部进度条跑完、出现 <span class="ok">Done / 完成</span> 即可（会自动刷新索引）。</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>安装「魔法相机」</h2>
+    <ol>
+      <li>仍在「软件源」页，点刚出现的 <b>MAXUI / 魔法相机</b> 这一行进入源。</li>
+      <li>点里面的 <b>魔法相机（com.maxui.tweak）</b> → 右上角<span class="tap">「获取 / Get」</span>（变成「确认队列」）。</li>
+      <li>点底部<span class="tap">「确认队列 / Confirm Queue」</span> → 再点右上角<span class="tap">「确认 / Confirm」</span>开始安装。</li>
+      <li>装完底部出现<span class="tap">「注销桌面 / Respring」</span>，点它，屏幕黑一下回到锁屏即完成。</li>
+    </ol>
+    <div class="mut">若你之前装过旧版「虚拟相机 / VCam Plus」，本包会<span class="ok">自动替换</span>它并保留你的激活与视频素材，无需先卸载。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>激活与使用</h2>
+    <ol>
+      <li>打开任意会调用相机的 App，<b>1.5 秒内</b>先后按一下<span class="tap">音量＋</span>再按<span class="tap">音量－</span>（顺序不限），呼出魔法相机悬浮菜单。</li>
+      <li>首次进入点<span class="tap">「授权」</span>，输入你拿到的授权码（形如 <code>VCAM-XXXX-XXXX-XXXX-XXXX</code>），确定后显示剩余时长。</li>
+      <li>把要替换的视频命名为 <code>video.mp4</code>，用 Filza 放到：
+        <br><code>/var/jb/var/mobile/Library/vcamplus/</code></li>
+      <li>菜单里打开<span class="tap">「开启魔法相机」</span>即全局替换（含 Safari 网页摄像头）；删除该目录下名为 <code>enabled</code> 的空文件即恢复真实摄像头。</li>
+    </ol>
+  </div>
+
+  <details>
+    <summary>放视频 / 图片的具体位置与命名</summary>
+    <p>目录：<code>/var/jb/var/mobile/Library/vcamplus/</code></p>
+    <p>• 主视频：<code>video.mp4</code>（自动循环）<br>
+       • 备用槽位：<code>1.mp4</code>～<code>6.mp4</code><br>
+       • 静态图片：<code>image.jpg</code><br>
+       • 开关文件：存在 <code>enabled</code>（无后缀空文件）= 开启，删除=关闭<br>
+       • 电脑推流配置：<code>stream.conf</code></p>
+  </details>
+
+  <details>
+    <summary>常见问题</summary>
+    <p><b>添加源报红字 / 超时：</b>换网络（关代理或换 Wi‑Fi/流量），在软件源页下拉刷新一次。</p>
+    <p><b>Sileo 一点就闪退：</b>先在 Dopamine 里确认已勾选越狱并重新「Jailbreak」进入；仍闪退就强制重启手机后重新越狱再开 Sileo。</p>
+    <p><b>装完相机仍是真实画面：</b>确认已 Respring、菜单里已「开启魔法相机」、video.mp4 路径与名字正确，然后把目标 App 从后台划掉重开。</p>
+    <p><b>想临时恢复真实相机：</b>菜单点「关闭魔法相机」，或用 Filza 删除 enabled 文件后 Respring。</p>
+  </details>
+
+  <div class="mut" style="text-align:center;margin-top:18px">MAXUI · 免费离线卡密版 · 源与安装包均托管于 GitHub</div>
+</div>
+<script>
+function copySrc(){
+  var t=document.getElementById('src').textContent.trim();
+  var done=function(){var b=event.target;var o=b.textContent;b.textContent='已复制 ✓';setTimeout(function(){b.textContent=o},1500)};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done).catch(function(){fallback(t);done()});}
+  else{fallback(t);done();}
+  function fallback(x){var ta=document.createElement('textarea');ta.value=x;document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}ta.remove();}
+}
+</script>
+</body>
+</html>
