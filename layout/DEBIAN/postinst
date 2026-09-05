@@ -1,0 +1,40 @@
+#!/bin/sh
+# maxui postinst
+BACKUP_DIR="/tmp/maxui-migrate"
+VCAM_DIR="/var/jb/var/mobile/Library/vcamplus"
+LOGS_DIR="/var/mobile/Library/Logs"
+DYLIBS_DIR="/var/jb/Library/MobileSubstrate/DynamicLibraries"
+
+# 1) remove any stale old vcamplus files to prevent double injection
+for f in vcamplus.dylib vcamplus.plist vcamplus.dylib.roothidepatch; do
+    if [ -e "$DYLIBS_DIR/$f" ]; then rm -f "$DYLIBS_DIR/$f" 2>/dev/null || true; echo "maxui: removed stale $f"; fi
+done
+
+# 2) runtime data dir (kept name vcamplus to match dylib constant), ensure mobile writable
+mkdir -p "$VCAM_DIR" 2>/dev/null || true
+chmod 0777 "$VCAM_DIR" 2>/dev/null || true
+chown -R mobile:mobile "$VCAM_DIR" 2>/dev/null || true
+touch "$VCAM_DIR/debug.log" "$VCAM_DIR/mediaserverd.log" 2>/dev/null || true
+chmod 0664 "$VCAM_DIR/debug.log" "$VCAM_DIR/mediaserverd.log" 2>/dev/null || true
+chown mobile:mobile "$VCAM_DIR/debug.log" "$VCAM_DIR/mediaserverd.log" 2>/dev/null || true
+
+# 3) restore activation/state backed up by preinst before old package removal
+if [ -d "$BACKUP_DIR" ]; then
+    cp -a "$BACKUP_DIR"/. "$VCAM_DIR"/ 2>/dev/null || true
+    chown -R mobile:mobile "$VCAM_DIR" 2>/dev/null || true
+    rm -rf "$BACKUP_DIR" 2>/dev/null || true
+    echo "maxui: activation/state restored"
+fi
+
+# 4) visible log symlinks
+mkdir -p "$LOGS_DIR" 2>/dev/null || true
+ln -sf "$VCAM_DIR/debug.log"        "$LOGS_DIR/vcamplus_debug.log" 2>/dev/null || true
+ln -sf "$VCAM_DIR/mediaserverd.log" "$LOGS_DIR/vcamplus_mediaserverd.log" 2>/dev/null || true
+
+# 5) RootHide AutoPatches (skipped on Dopamine where target is absent)
+AUTOPATCH_TARGET="/var/jb/usr/lib/DynamicPatches/AutoPatches.dylib"
+if [ -e "$AUTOPATCH_TARGET" ] && [ -f "$DYLIBS_DIR/maxui.dylib" ]; then
+    ln -sf "$AUTOPATCH_TARGET" "$DYLIBS_DIR/maxui.dylib.roothidepatch" 2>/dev/null || true
+    echo "maxui: RootHide AutoPatches linked"
+fi
+exit 0

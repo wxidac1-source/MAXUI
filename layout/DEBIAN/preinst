@@ -1,0 +1,17 @@
+#!/bin/sh
+# maxui preinst - backup activation/state before old package is removed by Conflicts
+BACKUP_DIR="/tmp/maxui-migrate"
+VCAM_DIR="/var/jb/var/mobile/Library/vcamplus"
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    rm -rf "$BACKUP_DIR" 2>/dev/null || true
+    if [ -d "$VCAM_DIR" ]; then
+        mkdir -p "$BACKUP_DIR" 2>/dev/null || true
+        for f in license.dat webcam.dat enabled stream.conf vcam_flag .ts .ntc; do
+            if [ -f "$VCAM_DIR/$f" ]; then
+                cp -a "$VCAM_DIR/$f" "$BACKUP_DIR/" 2>/dev/null || true
+            fi
+        done
+        echo "maxui: activation/state backed up"
+    fi
+fi
+exit 0

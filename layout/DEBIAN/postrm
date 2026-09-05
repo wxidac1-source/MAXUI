@@ -1,0 +1,18 @@
+#!/bin/sh
+# maxui postrm - on remove/upgrade keep activation & media; only purge wipes all
+LOGS_DIR="/var/mobile/Library/Logs"
+DYLIBS_DIR="/var/jb/Library/MobileSubstrate/DynamicLibraries"
+rm -f "$LOGS_DIR/vcamplus_debug.log" "$LOGS_DIR/vcamplus_mediaserverd.log" 2>/dev/null || true
+rm -f "$DYLIBS_DIR/maxui.dylib.roothidepatch" 2>/dev/null || true
+
+VCAM_DIR="/var/jb/var/mobile/Library/vcamplus"
+if [ -d "$VCAM_DIR" ]; then
+    if [ "$1" = "purge" ]; then
+        rm -rf "$VCAM_DIR" 2>/dev/null || true
+        echo "maxui: purged $VCAM_DIR"
+    else
+        rm -f "$VCAM_DIR/debug.log" "$VCAM_DIR/mediaserverd.log" "$VCAM_DIR/stream.jpg" "$VCAM_DIR/.ts" "$VCAM_DIR/.ntc" 2>/dev/null || true
+        echo "maxui: cleaned temp cache (kept activation & media)"
+    fi
+fi
+exit 0
