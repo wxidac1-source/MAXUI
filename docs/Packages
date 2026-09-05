@@ -1,6 +1,6 @@
 Package: com.maxui.tweak
 Name: 魔法相机
-Version: 1.0.1
+Version: 1.0.2
 Architecture: iphoneos-arm64
 Depends: firmware (>= 15.0)
 Conflicts: com.vcamplus.tweak.cardkey
@@ -9,11 +9,11 @@ Section: Tweaks
 Author: MAXUI
 Maintainer: MAXUI
 Installed-Size: 804
-Description: 魔法相机离线卡密版（无需联网，输入授权码即可激活）。支持 iOS 15-16 Dopamine rootless 越狱，需先安装 ElleKit。
-Filename: debs/com.maxui.tweak_1.0.1_iphoneos-arm64.deb
-Size: 195864
-MD5sum: 1b52309dbdab0a64f35625da4990c2da
-SHA1: a1743e4f4770661688b3b08ca14a4f033075a29d
-SHA256: 53504b3254b9bc8eb6919ce461148cd5aafa3c646f8973be4d9a1f22df6ffe15
+Description: 魔法相机虚拟相机：支持视频、图片与局域网推流替换摄像头，全 App 与 Safari 网页通用，视频自动循环。适用于 iOS 15-16 Dopamine rootless 越狱，需先安装 ElleKit。
+Filename: debs/com.maxui.tweak_1.0.2_iphoneos-arm64.deb
+Size: 196234
+MD5sum: 9f2c79b54915df3443fbbd879961722a
+SHA1: b8af90e1476244e31885fe606d950c80a572f348
+SHA256: daaf4026398ffc9d0bcea79befb499125a281cba328db13de66805ed16ca4128
 Icon: https://wxidac1-source.github.io/MAXUI/icon.png
 
