@@ -1,0 +1,18 @@
+Origin: MAXUI
+Label: 魔法相机
+Suite: stable
+Version: 1.0
+Codename: stable
+Architectures: iphoneos-arm64
+Components: main
+Description: 魔法相机 MAXUI 离线卡密版软件源
+Date: Sat, 05 Sep 2026 22:34:10 UTC
+MD5Sum:
+ f3caff058c3d3a9577d76aab576eaa45 703 Packages
+ 06b5ff17e921f961599e76fb84779bab 559 Packages.gz
+SHA1Sum:
+ ad2c2c2090b551ec8bd488bf0a69c74cf8203a52 703 Packages
+ e2dcf7b302ca86fbc23f6f24c6f6d6d369a374fb 559 Packages.gz
+SHA256Sum:
+ de4cdacb1da91442e430e3f97dc928812c216da4111548aa0bf1fe535ca69a51 703 Packages
+ 68c4bbf2db96314c73149e0eafdb07fe2a9b946e799c71e67e69be0f320773a8 559 Packages.gz
