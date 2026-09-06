@@ -5,7 +5,7 @@ Architecture: iphoneos-arm64
 Depends: firmware (>= 15.0), mobilesubstrate (>= 0.9.5000) | ellekit (>= 1.0)
 Conflicts: com.vcamplus.tweak.cardkey, com.vcamplus.tweak
 Replaces: com.vcamplus.tweak.cardkey, com.vcamplus.tweak
-Description: 魔法相机虚拟相机：支持视频、图片与局域网/USB推流替换摄像头，全 App 与 Safari 网页通用，视频自动循环、时间戳重定时。适配 iOS 15-16.7.x 的 Dopamine / palera1n rootless 越狱（A11 的 iPhone 8/X 用 palera1n）。授权绑定芯片硬件，刷机或一键新机后自动恢复、无需重新输入，时长自首次激活起连续计算，全程纯离线运行。
+Description: 魔法相机虚拟相机：支持视频、图片与局域网/USB推流替换摄像头，全 App 与 Safari 网页通用，视频自动循环、时间戳重定时。适配 iOS 15-17.x 的 palera1n / Dopamine rootless 越狱（A11 的 iPhone 8/X 用 palera1n）。运行状态与本机芯片绑定，一键新机或刷机后自动恢复、无需重新设置，使用时长自第一次启用起连续计算，全程纯离线运行。
 Author: MAXUI
 Maintainer: MAXUI
 Section: Tweaks
