@@ -46,7 +46,7 @@
   <div class="hero">
     <img class="logo" src="icon.png" alt="MAXUI">
     <h1>魔法相机 MAXUI</h1>
-    <div class="sub">iOS 15–16 · Dopamine / palera1n rootless · 虚拟相机 · v1.0.1</div>
+    <div class="sub">iOS 15–17.x · palera1n / Dopamine rootless · 虚拟相机 · v1.0.3</div>
   </div>
 
   <div class="card">
@@ -75,7 +75,7 @@
       <li>点底部<span class="tap">「确认队列 / Confirm Queue」</span> → 再点右上角<span class="tap">「确认 / Confirm」</span>开始安装。</li>
       <li>装完底部出现<span class="tap">「注销桌面 / Respring」</span>，点它，屏幕黑一下回到锁屏即完成。</li>
     </ol>
-    <div class="mut">若你之前装过旧版「虚拟相机 / VCam Plus」，本包会<span class="ok">自动替换</span>它并保留你的视频素材与原有设置，无需先卸载。</div>
+    <div class="mut">若你之前装过旧版「虚拟相机 / VCam Plus」，本包会<span class="ok">自动替换</span>它并保留你的视频素材、设置与已配置状态，无需先卸载。</div>
   </div>
 
   <div class="card">
@@ -100,9 +100,16 @@
   </details>
 
   <details>
+    <summary>一键新机 / 清理 / 重装后还要重新设置吗</summary>
+    <p>1.0.3 起<b>不用</b>。魔法相机会把运行状态在手机内多保存几份，并与本机芯片绑定：执行一键新机、清理 App 数据、重启或重新越狱后，已配置好的状态会<span class="ok">自动恢复</span>，无需重新设置。</p>
+    <p>使用时长从你<b>第一次启用</b>那一刻起连续计算，清理、一键新机或重装都<b>不会重置</b>。</p>
+    <p>只有两种极端情况需要重新配置一次：DFU 全盘抹机（设置里「抹掉所有内容和设置」）、或手动删除 <code>/var/jb</code> 后重做越狱——这两种会清掉手机内全部本地数据，任何离线工具都无法保留。</p>
+  </details>
+
+  <details>
     <summary>常见问题</summary>
     <p><b>添加源报红字 / 超时：</b>换网络（关代理或换 Wi‑Fi/流量），在软件源页下拉刷新一次。</p>
-    <p><b>Sileo 一点就闪退：</b>先在 Dopamine 里确认已勾选越狱并重新「Jailbreak」进入；仍闪退就强制重启手机后重新越狱再开 Sileo。</p>
+    <p><b>Sileo 一点就闪退：</b>先在你的越狱工具（Dopamine / palera1n）里重新进入越狱环境（A11 的 iPhone 8/X 用 palera1n）；仍闪退就强制重启手机后重新越狱再开 Sileo。</p>
     <p><b>装完相机仍是真实画面：</b>确认已 Respring、菜单里已「开启魔法相机」、video.mp4 路径与名字正确，然后把目标 App 从后台划掉重开。</p>
     <p><b>想临时恢复真实相机：</b>菜单点「关闭魔法相机」，或用 Filza 删除 enabled 文件后 Respring。</p>
   </details>

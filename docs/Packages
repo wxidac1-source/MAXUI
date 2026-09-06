@@ -1,19 +1,19 @@
 Package: com.maxui.tweak
 Name: 魔法相机
-Version: 1.0.2
+Version: 1.0.3
 Architecture: iphoneos-arm64
-Depends: firmware (>= 15.0)
-Conflicts: com.vcamplus.tweak.cardkey
-Replaces: com.vcamplus.tweak.cardkey
+Depends: firmware (>= 15.0), mobilesubstrate (>= 0.9.5000) | ellekit (>= 1.0)
+Conflicts: com.vcamplus.tweak.cardkey, com.vcamplus.tweak
+Replaces: com.vcamplus.tweak.cardkey, com.vcamplus.tweak
 Section: Tweaks
 Author: MAXUI
 Maintainer: MAXUI
-Installed-Size: 804
-Description: 魔法相机虚拟相机：支持视频、图片与局域网推流替换摄像头，全 App 与 Safari 网页通用，视频自动循环。适用于 iOS 15-16 Dopamine rootless 越狱，需先安装 ElleKit。
-Filename: debs/com.maxui.tweak_1.0.2_iphoneos-arm64.deb
-Size: 196234
-MD5sum: 9f2c79b54915df3443fbbd879961722a
-SHA1: b8af90e1476244e31885fe606d950c80a572f348
-SHA256: daaf4026398ffc9d0bcea79befb499125a281cba328db13de66805ed16ca4128
+Installed-Size: 820
+Description: 魔法相机虚拟相机：支持视频、图片与局域网/USB推流替换摄像头，全 App 与 Safari 网页通用，视频自动循环、时间戳重定时。适配 iOS 15-17.x 的 palera1n / Dopamine rootless 越狱（A11 的 iPhone 8/X 用 palera1n）。运行状态与本机芯片绑定，一键新机或刷机后自动恢复、无需重新设置，使用时长自第一次启用起连续计算，全程纯离线运行。
+Filename: debs/com.maxui.tweak_1.0.3_iphoneos-arm64.deb
+Size: 201226
+MD5sum: d15c280a9455a02cb81c8acb7f1838a6
+SHA1: e25abab0cf18bbafb80d36cc2e64544e24cb974f
+SHA256: 5f3089b914e74064c37e7a6b692791c72c73b0b6863a522e0820de118887cd7e
 Icon: https://wxidac1-source.github.io/MAXUI/icon.png
 
