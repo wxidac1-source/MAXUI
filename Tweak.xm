@@ -413,37 +413,13 @@ static NSString *_gDID(void) {
     NSString *cached = [NSString stringWithContentsOfFile:_devPath()
         encoding:NSUTF8StringEncoding error:nil];
     if (cached && cached.length > 0) {
-        // Tamper check: in SpringBoard, verify UDID + ECID both match hardware
+        // [1.0.3] 授权改由只读硬件 ECID 锚定（见 _gHWID）。一键新机/改机工具会修改软 UDID，
+        // 这属于用户正常操作，不再因此清除授权；此处仅在 SpringBoard 刷新硬件 ECID 缓存。
         NSString *proc = [[NSProcessInfo processInfo] processName];
         if ([proc isEqualToString:_ds("\x64\x47\x45\x5E\x59\x50\x75\x58\x56\x45\x53",11)]) {
-            BOOL tampered = NO;
-            // Check 1: UDID — MGCopyAnswer vs file
-            NSString *realUDID = _getMGUDID();
-            if (realUDID && realUDID.length > 0 && ![cached isEqualToString:realUDID]) {
-                vcam_log(@"DID: UDID tamper detected!");
-                tampered = YES;
-            }
-            // Check 2: ECID — IORegistry vs cached ecid.dat
             NSString *realECID = _getIORegUDID();
             if (realECID && realECID.length > 0) {
-                NSString *cachedECID = [NSString stringWithContentsOfFile:_ecidPath()
-                    encoding:NSUTF8StringEncoding error:nil];
-                if (cachedECID && cachedECID.length > 0 && ![cachedECID isEqualToString:realECID]) {
-                    vcam_log(@"DID: ECID tamper detected!");
-                    tampered = YES;
-                }
-                // Always save real ECID
                 [realECID writeToFile:_ecidPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
-            }
-            if (tampered) {
-                _setAuth(NO);
-                [[NSFileManager defaultManager] removeItemAtPath:_licPath() error:nil];
-                [[NSFileManager defaultManager] removeItemAtPath:_webJSPath() error:nil];
-                // Restore real UDID to file
-                if (realUDID && realUDID.length > 0) {
-                    [realUDID writeToFile:_devPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                    return realUDID;
-                }
             }
         }
         return cached;
@@ -475,6 +451,20 @@ static NSString *_gDID(void) {
 static void _sDID(void) {
     if ([[NSFileManager defaultManager] fileExistsAtPath:_devPath()]) return;
     _gDID();
+}
+
+// [1.0.3] 硬件锚点：优先芯片 ECID（IORegistry unique-chip-id，内核设备树只读值，
+// 361 一键新机等用户态改机工具改不到），兜底 ecid.dat 缓存，最后才退回软 UDID。
+// 授权绑定它，可做到"改机/清 App 数据后授权仍在、换机（不同芯片）不可用"。
+__attribute__((optnone)) static NSString *_gHWID(void) {
+    @try {
+        NSString *hw = _getIORegUDID();
+        if (hw && hw.length > 0) return hw;
+        hw = [NSString stringWithContentsOfFile:_ecidPath() encoding:NSUTF8StringEncoding error:nil];
+        if (hw && hw.length > 0) return hw;
+        hw = _gDID();
+        return (hw && hw.length > 0) ? hw : @"unknown";
+    } @catch (NSException *e) { return @"unknown"; }
 }
 
 __attribute__((optnone)) static void _xorBuf(uint8_t *buf, NSUInteger len) {
@@ -515,6 +505,128 @@ __attribute__((always_inline)) __attribute__((unused)) static inline uint32_t _b
     return h;
 }
 
+// ===== [1.0.3] 授权持久化：硬件锚定 + 多位置冗余 + 本地自愈（纯离线，不联网）=====
+// 主位置仍是 _licPath()；下列为灾备副本，内容与主位置完全相同（均为 XOR+base64 字符串）。
+// 副本分散在 /var/jb 不同目录层级的隐藏目录：361 一键新机通常只清 App 沙盒与
+// Library/Caches，不会清这些系统层隐藏目录，因此清机/改机后仍能找回授权，免重新输入。
+static NSArray *_licBackupPaths(void) {
+    static NSArray *p = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        p = @[
+            @"/var/jb/var/mobile/.mxc/.lk",
+            @"/var/jb/var/mobile/Documents/.mxc/.lk",
+            @"/var/jb/etc/mxc.d/lk",
+            @"/var/jb/var/.mxc/.lk",
+        ];
+    });
+    return p;
+}
+
+// 解码 license 字符串（base64 + XOR）为字典，失败返回 nil
+static NSDictionary *_licDecode(NSString *b64) {
+    @try {
+        if (!b64 || b64.length < 8) return nil;
+        NSData *dec = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+        if (!dec) return nil;
+        NSMutableData *md = [NSMutableData dataWithData:dec];
+        _xorBuf((uint8_t *)[md mutableBytes], md.length);
+        return [NSJSONSerialization JSONObjectWithData:md options:0 error:nil];
+    } @catch (NSException *e) { return nil; }
+}
+
+static NSString *_licReadRaw(NSString *path) {
+    @try { return [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil]; }
+    @catch (NSException *e) { return nil; }
+}
+
+// 把同一份 license 字符串写到主位置 + 全部灾备位置（逐个容错，单个失败不影响其它）
+static void _licWriteAll(NSString *b64) {
+    @try {
+        if (!b64 || b64.length < 8) return;
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSMutableArray *all = [NSMutableArray arrayWithObject:_licPath()];
+        [all addObjectsFromArray:_licBackupPaths()];
+        for (NSString *path in all) {
+            @try {
+                NSString *dir = [path stringByDeletingLastPathComponent];
+                if (![fm fileExistsAtPath:dir])
+                    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES
+                                  attributes:@{NSFilePosixPermissions: @(0755)} error:nil];
+                [b64 writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                [fm setAttributes:@{NSFilePosixPermissions: @(0644)} ofItemAtPath:path error:nil];
+            } @catch (NSException *e) {}
+        }
+    } @catch (NSException *e) {}
+}
+
+// 在主位置与所有灾备位置中，找出属于本机硬件、真实到期最晚的一份有效 license
+static NSString *_licBestBackup(void) {
+    @try {
+        NSString *hwid = _gHWID();
+        double nowMs = [[NSDate date] timeIntervalSince1970] * 1000.0;
+        NSMutableArray *all = [NSMutableArray arrayWithObject:_licPath()];
+        [all addObjectsFromArray:_licBackupPaths()];
+        NSString *best = nil; double bestRe = 0;
+        for (NSString *path in all) {
+            NSDictionary *d = _licDecode(_licReadRaw(path));
+            if (!d) continue;
+            NSString *u = d[@"u"]; NSNumber *reN = d[@"re"];
+            if (!u || !reN) continue;
+            if (![u isEqualToString:hwid]) continue;   // 必须是本机硬件（换机不可用）
+            double re = [reN doubleValue];
+            if (re < nowMs) continue;                    // 已过期不用于恢复
+            if (re > bestRe) { bestRe = re; best = _licReadRaw(path); }
+        }
+        return best;
+    } @catch (NSException *e) { return nil; }
+}
+
+// 本地自愈：主位置丢失/损坏/过期时用灾备恢复（刷机/新机免输入）；主位置正常时反向补齐缺失副本。
+// 返回处理后主位置是否存在属于本机且未过期的 license。纯离线。
+static BOOL _licHeal(void) {
+    @try {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *hwid = _gHWID();
+        double nowMs = [[NSDate date] timeIntervalSince1970] * 1000.0;
+        NSString *mainRaw = _licReadRaw(_licPath());
+        NSDictionary *mainD = _licDecode(mainRaw);
+        BOOL mainOK = (mainD && [mainD[@"u"] isEqualToString:hwid]
+                       && [mainD[@"re"] doubleValue] >= nowMs);
+
+        if (!mainOK) {
+            NSString *best = _licBestBackup();
+            if (best) {
+                NSString *dir = [_licPath() stringByDeletingLastPathComponent];
+                if (![fm fileExistsAtPath:dir])
+                    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES
+                                  attributes:@{NSFilePosixPermissions: @(0755)} error:nil];
+                [best writeToFile:_licPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                [fm setAttributes:@{NSFilePosixPermissions: @(0644)} ofItemAtPath:_licPath() error:nil];
+                mainRaw = best; mainOK = YES;
+                vcam_log(@"heal: license restored from local backup (no re-input)");
+            }
+        }
+        if (mainOK && mainRaw) {
+            for (NSString *bp in _licBackupPaths()) {
+                @try {
+                    NSString *have = _licReadRaw(bp);
+                    if (!have || ![have isEqualToString:mainRaw]) {
+                        NSString *dir = [bp stringByDeletingLastPathComponent];
+                        if (![fm fileExistsAtPath:dir])
+                            [fm createDirectoryAtPath:dir withIntermediateDirectories:YES
+                                          attributes:@{NSFilePosixPermissions: @(0755)} error:nil];
+                        [mainRaw writeToFile:bp atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                        [fm setAttributes:@{NSFilePosixPermissions: @(0644)} ofItemAtPath:bp error:nil];
+                    }
+                } @catch (NSException *e) {}
+            }
+        }
+        return mainOK;
+    } @catch (NSException *e) { return NO; }
+}
+// ===== [1.0.3] end =====
+
 static BOOL _chkLC(void) {
     // [CARDKEY] 离线卡密版：读取本地加密缓存，校验 UDID 绑定 + 过期时间 + 完整性校验和
     @try {
@@ -541,7 +653,7 @@ static BOOL _chkLC(void) {
                      _s = (u && e && c) ? 17 : 7; break;
             case 17: eVal = [e longLongValue]; cVal = [c longLongValue];
                      _s = (cVal == (eVal % 99991)) ? 20 : 7; break;
-            case 20: _s = [u isEqualToString:_gDID()] ? 23 : 7; break;
+            case 20: _s = [u isEqualToString:_gHWID()] ? 23 : 7; break; // [1.0.3] 硬件 ECID 锚定
             case 23: { double nowMs = [[NSDate date] timeIntervalSince1970] * 1000.0;
                      _s = (nowMs <= (double)eVal) ? 26 : 7; } break;
             case 26: _r = YES; _s = 99; break;
@@ -571,21 +683,24 @@ __attribute__((optnone)) static NSString *_getCachedKey(void) {
     } @catch (NSException *e) { return nil; }
 }
 
-// Save to cache
-static void _svLC(NSString *key, NSString *udid, double expires, int usesLeft) {
+// [1.0.3] 保存授权：startMs=首次激活时间（一旦确定即固定），realExp=真实到期（固定、不被重置）。
+// 本地校验窗口 e 只向前滚动 25h、且永不超过 realExp；同时写入主位置与全部灾备位置。
+static void _svLC(NSString *key, NSString *hwid, double startMs, double realExp, int usesLeft) {
     @try {
-        double realExp = expires; // real server expiry for display
-        double maxExp = [[NSDate date] timeIntervalSince1970] * 1000.0 + 25.0 * 3600000.0; /* 25h buffer for 1-day cards */
-        if (expires > maxExp) expires = maxExp;
-        long long eVal = (long long)expires;
+        double nowMs = [[NSDate date] timeIntervalSince1970] * 1000.0;
+        double win = nowMs + 25.0 * 3600000.0;               // 本地滚动窗口 25h
+        double eClipped = (realExp < win) ? realExp : win;   // 窗口永不超过真实到期
+        long long eVal = (long long)eClipped;
         long long chk = eVal % 99991; // integrity checksum
-        NSDictionary *d = @{@"k": key, @"u": udid, @"e": @(eVal), @"c": @(chk), @"re": @((long long)realExp), @"ul": @(usesLeft)};
+        NSDictionary *d = @{@"k": key, @"u": hwid, @"st": @((long long)startMs),
+                            @"e": @(eVal), @"c": @(chk),
+                            @"re": @((long long)realExp), @"ul": @(usesLeft)};
         NSData *json = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
         if (!json) return;
         NSMutableData *md = [NSMutableData dataWithData:json];
         _xorBuf((uint8_t *)[md mutableBytes], md.length);
         NSString *b64 = [md base64EncodedStringWithOptions:0];
-        [b64 writeToFile:_licPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        _licWriteAll(b64);
     } @catch (NSException *e) {}
 }
 
@@ -1086,7 +1201,7 @@ static void _fetchWebJS(void) {
 static void _vrfO(NSString *key, void (^done)(BOOL ok, NSString *msg, double exp)) {
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         @try {
-            NSString *udid = _gDID();
+            NSString *hwid = _gHWID(); // [1.0.3] 硬件 ECID 锚定（改机/刷机不变）
             NSString *clean = [[[key uppercaseString] componentsSeparatedByString:@"-"] componentsJoinedByString:@""];
             if (![clean hasPrefix:@"VCAM"] || clean.length != 20) {
                 dispatch_async(dispatch_get_main_queue(), ^{ done(NO, @"授权码格式错误", 0); });
@@ -1137,7 +1252,7 @@ static void _vrfO(NSString *key, void (^done)(BOOL ok, NSString *msg, double exp
                 return;
             }
 
-            // 计算到期时间
+            // 计算时长
             static const double DUR[5] = {
                 1.0 * 3600.0 * 1000.0,           // hour
                 24.0 * 3600.0 * 1000.0,          // day
@@ -1146,13 +1261,29 @@ static void _vrfO(NSString *key, void (^done)(BOOL ok, NSString *msg, double exp
                 365.0 * 24.0 * 3600.0 * 1000.0,  // year
             };
             double now = [[NSDate date] timeIntervalSince1970] * 1000.0;
-            double expires = now + DUR[plan_id];
+            // [1.0.3] 首次激活锚定：若同一硬件 ECID 的任一冗余位置已存在未到期授权，
+            // 沿用其首次激活时间(st)与真实到期(re)，刷机/重新激活都不重置（连续计时）。
+            NSDictionary *anchor = _licDecode(_licBestBackup());
+            double stMs, reMs; BOOL anchored = NO;
+            if (anchor && [anchor[@"u"] isEqualToString:hwid] &&
+                [anchor[@"re"] doubleValue] > now) {
+                NSNumber *aSt = anchor[@"st"];
+                stMs = aSt ? [aSt doubleValue] : ([anchor[@"re"] doubleValue] - DUR[plan_id]);
+                reMs = [anchor[@"re"] doubleValue];   // 到期时间纹丝不动
+                anchored = YES;
+            } else {
+                stMs = now;
+                reMs = now + DUR[plan_id];            // 真正首次 / 旧授权已过期 → 新周期
+            }
 
-            // 写入加密缓存 (UDID 绑定: _chkLC 读缓存时校验 _gDID() 必须一致)
-            _svLC(key, udid, expires, 999999);
+            // 写入加密缓存（硬件 ECID 绑定 + 首次锚定 + 多位置冗余）
+            _svLC(key, hwid, stMs, reMs, 999999);
             _savTS();
 
-            dispatch_async(dispatch_get_main_queue(), ^{ done(YES, @"授权成功", expires); });
+            double outRe = reMs;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                done(YES, anchored ? @"授权已恢复（到期时间保持不变）" : @"授权成功", outRe);
+            });
         } @catch (NSException *ex) {
             dispatch_async(dispatch_get_main_queue(), ^{ done(NO, @"验证异常", 0); });
         }
@@ -1218,11 +1349,12 @@ static void _shAct(void) {
 // Startup check
 static void _onlineChk(void);
 static void _autoRestore(void);
+static void _refreshLC(void); // [1.0.3] 前向声明（_reVal 周期复检会调用）
 static void _chkA(void) {
-    // [CARDKEY] 启动检查 (离线): 校验本地缓存 -> setAuth
+    // [CARDKEY] 启动检查 (离线): 本地自愈恢复 -> 校验本地缓存 -> setAuth
     volatile int _s = 0;
     while (1) switch (_s) {
-        case 0: _s = _chkLC() ? 3 : 10; break;
+        case 0: _licHeal(); _s = _chkLC() ? 3 : 10; break;
         case 3: _setAuth(YES); _s = 5; break;
         case 5: vcam_log(@"A: ok"); _s = 99; break;
         case 10: _setAuth(NO); _s = 12; break;
@@ -1236,12 +1368,12 @@ static void _chkA(void) {
 
 // Periodic re-validation (self-scheduling every 60 seconds)
 static void _reVal(void) {
-    // [CARDKEY] 周期复检 (离线): 每 60 秒重读本地缓存
+    // [CARDKEY] 周期复检 (离线): 每 60 秒自愈恢复 + 重读本地缓存 + 本地滚动窗口
     volatile int _s = 0;
     while (1) switch (_s) {
-        case 0: _savTS(); _s = 3; break;
+        case 0: _savTS(); _licHeal(); _s = 3; break;
         case 3: _s = _chkLC() ? 5 : 7; break;
-        case 5: _setAuth(YES); _s = 10; break;
+        case 5: _refreshLC(); _setAuth(YES); _s = 10; break; // [1.0.3] 离线滚动 25h 窗口
         case 7: _setAuth(NO); _s = 10; break;
         case 10: _s = 13; break; // [CARDKEY] skip _onlineChk (offline)
         case 13: dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60.0 * NSEC_PER_SEC)),
@@ -1252,25 +1384,21 @@ static void _reVal(void) {
     }
 }
 
-// Refresh local license cache expiry (extend 1h window on heartbeat success)
+// [1.0.3] 离线滚动本地窗口：固定首次时间 st 与真实到期 re，仅把 25h 校验窗口向前续，
+// 不联网、不重置到期时间。长期授权借此在纯离线下持续有效，直到真实到期 re。
 static void _refreshLC(void) {
     @try {
-        NSData *data = [NSData dataWithContentsOfFile:_licPath()];
-        if (!data || data.length < 10) return;
-        NSString *b64 = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        if (!b64) return;
-        NSData *dec = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
-        if (!dec) return;
-        NSMutableData *md = [NSMutableData dataWithData:dec];
-        _xorBuf((uint8_t *)[md mutableBytes], md.length);
-        NSDictionary *d = [NSJSONSerialization JSONObjectWithData:md options:0 error:nil];
+        NSDictionary *d = _licDecode(_licReadRaw(_licPath()));
         if (!d) return;
         NSString *k = d[@"k"], *u = d[@"u"];
-        NSNumber *reN = d[@"re"], *ulN = d[@"ul"];
+        NSNumber *reN = d[@"re"], *stN = d[@"st"], *ulN = d[@"ul"];
         if (!k || !u || !reN) return;
+        double nowMs = [[NSDate date] timeIntervalSince1970] * 1000.0;
         double realExp = [reN doubleValue];
-        int ul = ulN ? [ulN intValue] : 0;
-        _svLC(k, u, realExp, ul);
+        if (realExp < nowMs) return;                 // 已真实到期，不再续窗
+        double st = stN ? [stN doubleValue] : realExp;
+        int ul = ulN ? [ulN intValue] : 999999;
+        _svLC(k, u, st, realExp, ul);
     } @catch (NSException *e) {}
 }
 
@@ -1306,7 +1434,7 @@ __attribute__((unused)) static void _autoRestore(void) {
                         double exp = [res[_ds("\x52\x4F\x47\x5E\x45\x52\x44",7)] doubleValue];
                         int ul = [res[_ds("\x42\x44\x52\x44\x7B\x52\x51\x43",8)] intValue];
                         if (key) {
-                            _svLC(key, udid, exp, ul);
+                            _svLC(key, udid, exp, exp, ul); // [1.0.3] 新签名（st 未知，用 re）
                             _setAuth(YES);
                             _fetchWebJS();
                             vcam_log(@"restore: success! license recovered");
