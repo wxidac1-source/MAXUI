@@ -6235,6 +6235,7 @@ static void vcam_installHooks(void) {
     // 3-4. SBVolumeControl -increaseVolume / -decreaseVolume
     {
         Class cls = NSClassFromString(@"SBVolumeControl");
+        int sbVolHooked = 0;
         if (cls) {
             {
                 SEL sel = @selector(increaseVolume);
@@ -6251,6 +6252,7 @@ static void vcam_installHooks(void) {
                         }
                     });
                     method_setImplementation(m, ni);
+                    sbVolHooked++;
                 }
             }
             {
@@ -6268,9 +6270,21 @@ static void vcam_installHooks(void) {
                         }
                     });
                     method_setImplementation(m, ni);
+                    sbVolHooked++;
                 }
             }
         }
+        // Plaintext self-check marker (Filza-readable): proves SpringBoard injection + volume hook
+        @try {
+            NSString *procNow = [[NSProcessInfo processInfo] processName];
+            if ([procNow isEqualToString:@"SpringBoard"]) {
+                NSString *mk = [NSString stringWithFormat:
+                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.3\ntime: %@\n",
+                    (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
+                [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
+                     encoding:NSUTF8StringEncoding error:nil];
+            }
+        } @catch (NSException *e) {}
     }
     // 5. CALayer -addSublayer:
     {
