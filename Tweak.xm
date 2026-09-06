@@ -4375,8 +4375,9 @@ static UIImage *_floatIconImage(void) {
         case 100: gVideoOffsetY += 0.05; break;           // ↑
         case 101: gVideoRotation = (gVideoRotation + 90) % 360; break; // 转
         case 102: gVideoOffsetX -= 0.05; break;            // ←
-        case 103: gVideoOffsetX = 0; gVideoOffsetY = 0;
-            vcam_log(@"RESET offsets to 0,0"); break; // 正
+        case 103: // 正 = full reset: pan offset + rotation + mirror all back to original
+            gVideoOffsetX = 0; gVideoOffsetY = 0; gVideoRotation = 0; gVideoFlipH = NO;
+            vcam_log(@"RESET view: offsets=0 rotation=0 flip=off"); break; // 正
         case 104: gVideoOffsetX += 0.05; break;            // →
         case 105: gVideoOffsetY -= 0.05; break;            // ↓
         case 106: gVideoFlipH = !gVideoFlipH; break;       // 翻
