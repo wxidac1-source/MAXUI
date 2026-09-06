@@ -1,6 +1,6 @@
 Package: com.maxui.tweak
 Name: 魔法相机
-Version: 1.0.4
+Version: 1.0.5
 Architecture: iphoneos-arm64
 Depends: firmware (>= 15.0), mobilesubstrate (>= 0.9.5000) | ellekit (>= 1.0)
 Conflicts: com.vcamplus.tweak.cardkey, com.vcamplus.tweak

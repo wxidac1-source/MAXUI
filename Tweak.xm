@@ -2127,6 +2127,41 @@ static CIImage *vcam_applyVideoTransforms(CIImage *img) {
     return img;
 }
 
+// Apply rotate/flip to a CGImage-backed source (stream JPEG / static image paths).
+// When no geometry is set, returns the SAME CGImage untouched — preserving the fast
+// CIContext-bypass path. When geometry IS set, returns a newly created CGImage the
+// caller owns (Create rule). Never returns NULL when given a valid image.
+static CGImageRef vcam_geoCGImage(CGImageRef cg) {
+    if (!cg) return NULL;
+    if (gVideoRotation == 0 && !gVideoFlipH) return cg;
+    if (!gCICtx) return cg;
+    @autoreleasepool {
+        CIImage *ci = [CIImage imageWithCGImage:cg];
+        if (!ci) return cg;
+        ci = vcam_applyVideoTransforms(ci);
+        CGRect r = ci.extent;
+        if (r.size.width <= 0 || r.size.height <= 0) return cg;
+        return [gCICtx createCGImage:ci fromRect:r];
+    }
+}
+
+// Apply rotate/flip to JPEG bytes (stream passthrough / static image). Returns a new
+// JPEG when geometry is set; returns the input untouched on the fast path or on failure.
+static NSData *vcam_geoJPEGData(NSData *data) {
+    if (!data || (gVideoRotation == 0 && !gVideoFlipH) || !gCICtx) return data;
+    @autoreleasepool {
+        CIImage *ci = [CIImage imageWithData:data];
+        if (!ci) return data;
+        ci = vcam_applyVideoTransforms(ci);
+        CGRect r = ci.extent;
+        if (r.size.width <= 0 || r.size.height <= 0) return data;
+        CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+        NSData *out = [gCICtx JPEGRepresentationOfImage:ci colorSpace:cs options:@{}];
+        CGColorSpaceRelease(cs);
+        return (out && out.length > 0) ? out : data;
+    }
+}
+
 // Apply three-color injection overlay to CIImage
 static CGRect gLastFaceRect = CGRectZero;
 static uint64_t gLastFaceTime = 0;
@@ -2350,7 +2385,9 @@ static BOOL vcam_replacePixelBuffer(CVPixelBufferRef pixelBuffer) {
             if (sCachedStreamImg) {
                 // Stream mode (PC push): use aspectFit so user sees the WHOLE pushed image
                 // (e.g. driver's license OCR scenario) — letterbox bars on edges, no zoom crop.
-                CIImage *img = vcam_aspectFit(sCachedStreamImg, w, h);
+                CIImage *img = vcam_applyVideoTransforms(sCachedStreamImg);
+                img = vcam_aspectFit(img, w, h);
+                img = vcam_applyOffset(img, w, h, gVideoOffsetX, gVideoOffsetY);
                 img = vcam_applyColorInject(img);
                 [gCICtx render:img toCVPixelBuffer:pixelBuffer];
                 // Force GPU render completion before returning buffer to caller
@@ -2364,7 +2401,9 @@ static BOOL vcam_replacePixelBuffer(CVPixelBufferRef pixelBuffer) {
         if (vcam_imageExists()) {
             CIImage *img = vcam_loadStaticImage();
             if (!img) return NO;
+            img = vcam_applyVideoTransforms(img);
             img = vcam_aspectFill(img, w, h);
+            img = vcam_applyOffset(img, w, h, gVideoOffsetX, gVideoOffsetY);
             img = vcam_applyColorInject(img);
             [gCICtx render:img toCVPixelBuffer:pixelBuffer];
             CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
@@ -2471,7 +2510,7 @@ static CIImage *vcam_acquireSourceImage(CMSampleBufferRef *outFrameToRelease) {
                         if (cgImg) {
                             CIImage *img = [CIImage imageWithCGImage:cgImg];
                             CGImageRelease(cgImg);
-                            if (img) return img;
+                            if (img) return vcam_applyVideoTransforms(img);
                         }
                     }
                 }
@@ -2480,7 +2519,7 @@ static CIImage *vcam_acquireSourceImage(CMSampleBufferRef *outFrameToRelease) {
         // Image mode
         if (vcam_imageExists()) {
             CIImage *img = vcam_loadStaticImage();
-            if (img) return img;
+            if (img) return vcam_applyVideoTransforms(img);
         }
         // Video mode
         if (gVideoPaused && gPausedFrame) {
@@ -2512,6 +2551,7 @@ static CVPixelBufferRef vcam_renderToNewBufferMatching(size_t targetW, size_t ta
         srcImg = vcam_applyColorInject(srcImg);
         // aspectFit into target dims (preserves aspect, adds black bars)
         srcImg = vcam_aspectFit(srcImg, targetW, targetH);
+        srcImg = vcam_applyOffset(srcImg, targetW, targetH, gVideoOffsetX, gVideoOffsetY);
         CGRect ext = srcImg.extent;
         if (ext.origin.x != 0 || ext.origin.y != 0) {
             srcImg = [srcImg imageByApplyingTransform:CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
@@ -2612,6 +2652,7 @@ static NSData *vcam_buildReplacementJPEG(size_t targetW, size_t targetH) {
         if (!srcImg) return nil;
         srcImg = vcam_applyColorInject(srcImg);
         srcImg = vcam_aspectFit(srcImg, targetW, targetH);
+        srcImg = vcam_applyOffset(srcImg, targetW, targetH, gVideoOffsetX, gVideoOffsetY);
         CGRect ext = srcImg.extent;
         if (ext.origin.x != 0 || ext.origin.y != 0) {
             srcImg = [srcImg imageByApplyingTransform:CGAffineTransformMakeTranslation(-ext.origin.x, -ext.origin.y)];
@@ -2640,7 +2681,7 @@ static NSData *vcam_currentFrameAsJPEG(void) {
                     NSData *data = [NSData dataWithContentsOfFile:VCAM_STREAM_FRAME];
                     if (data && data.length > 0) {
                         sLastStreamJPEG = data;
-                        return data;
+                        return vcam_geoJPEGData(data);
                     }
                 }
                 // File present but stale — show last good frame (don't delete)
@@ -2655,6 +2696,7 @@ static NSData *vcam_currentFrameAsJPEG(void) {
         if (vcam_imageExists()) {
             CIImage *img = vcam_loadStaticImage();
             if (!img) return nil;
+            img = vcam_applyVideoTransforms(img);
             CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
             NSData *data = [gCICtx JPEGRepresentationOfImage:img colorSpace:cs options:@{}];
             CGColorSpaceRelease(cs);
@@ -2716,7 +2758,9 @@ static CGImageRef vcam_nextCGImage(void) {
                         if (cgImg) {
                             if (sCachedStreamCG) CGImageRelease(sCachedStreamCG);
                             sCachedStreamCG = CGImageRetain(cgImg);
-                            return cgImg;
+                            CGImageRef outImg = vcam_geoCGImage(cgImg);
+                            if (outImg != cgImg) CGImageRelease(cgImg);
+                            return outImg;
                         }
                     }
                 }
@@ -2752,8 +2796,9 @@ static CGImageRef vcam_nextCGImage(void) {
                 }
             }
             if (gStaticCGImage) {
-                CGImageRetain(gStaticCGImage);
-                return gStaticCGImage;
+                CGImageRef outImg = vcam_geoCGImage(gStaticCGImage);
+                if (outImg == gStaticCGImage) CGImageRetain(outImg); // shared cache: hand caller its own retain
+                return outImg; // transformed: freshly created and already owned by caller
             }
             return NULL;
         } @catch (NSException *e) { return NULL; }
@@ -3263,7 +3308,7 @@ static void vcam_replacePhotoInternals(id photo) {
                         }
                         // Image mode
                         if (!virtImg && vcam_imageExists()) virtImg = vcam_loadStaticImage();
-                        // Video mode (with transforms)
+                        // Video mode
                         CMSampleBufferRef _vf = nil;
                         if (!virtImg) {
                             _vf = vcam_readFrame(gLockA, &gReaderA, &gOutputA);
@@ -3271,8 +3316,9 @@ static void vcam_replacePhotoInternals(id photo) {
                                 CVImageBufferRef pb = CMSampleBufferGetImageBuffer(_vf);
                                 if (pb) virtImg = [CIImage imageWithCVImageBuffer:pb];
                             }
-                            if (virtImg) virtImg = vcam_applyVideoTransforms(virtImg);
                         }
+                        // Rotate/flip apply equally to stream / static image / video
+                        if (virtImg) virtImg = vcam_applyVideoTransforms(virtImg);
                         if (virtImg) {
                             virtImg = vcam_aspectFill(virtImg, photoW, photoH);
                             // Apply user-set pan offset (matches preview path)
@@ -3427,8 +3473,9 @@ static void vcam_editLatestPhoto(void) {
                             CVImageBufferRef pb = CMSampleBufferGetImageBuffer(_ef);
                             if (pb) ci = [CIImage imageWithCVImageBuffer:pb];
                         }
-                        if (ci) ci = vcam_applyVideoTransforms(ci);
                     }
+                    // Rotate/flip apply equally to stream / static image / video
+                    if (ci) ci = vcam_applyVideoTransforms(ci);
                     if (ci && gCICtx) {
                         // AspectFill to match photo dimensions
                         size_t epW = gLastPhotoW > 0 ? gLastPhotoW : 3024;
@@ -3546,8 +3593,9 @@ static void vcam_hookPhotoDataOnClass(Class cls) {
                                     CVImageBufferRef pb = CMSampleBufferGetImageBuffer(_ff);
                                     if (pb) img = [CIImage imageWithCVImageBuffer:pb];
                                 }
-                                if (img) img = vcam_applyVideoTransforms(img);
                             }
+                            // Rotate/flip apply equally to stream / static image / video
+                            if (img) img = vcam_applyVideoTransforms(img);
                             if (img) {
                                 // byg vcam (vcam123) parity: aspectFit so the full video frame is visible
                                 // in the JPEG. The previous aspectFill cropped+zoomed when the photo's
@@ -3706,8 +3754,9 @@ static void vcam_recCaptureFrame(void) {
                 CVImageBufferRef pb = CMSampleBufferGetImageBuffer(vf);
                 if (pb) virtImg = [CIImage imageWithCVImageBuffer:pb];
             }
-            if (virtImg) virtImg = vcam_applyVideoTransforms(virtImg);
         }
+        // Rotate/flip apply equally to stream / static image / video
+        if (virtImg) virtImg = vcam_applyVideoTransforms(virtImg);
         if (!virtImg) { if (vf) CFRelease(vf); return; }
 
         virtImg = vcam_aspectFill(virtImg, gRecWidth, gRecHeight);
@@ -6279,7 +6328,7 @@ static void vcam_installHooks(void) {
             NSString *procNow = [[NSProcessInfo processInfo] processName];
             if ([procNow isEqualToString:@"SpringBoard"]) {
                 NSString *mk = [NSString stringWithFormat:
-                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.4\ntime: %@\n",
+                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.5\ntime: %@\n",
                     (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
                 [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
                      encoding:NSUTF8StringEncoding error:nil];
