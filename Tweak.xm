@@ -7504,6 +7504,26 @@ static void vcamplus_init(void) {
             }
         }
 
+        // High-detection third-party apps (TikTok/Douyin) block login merely because a camera tweak
+        // is active. They never need camera replacement, so return BEFORE any lock/hook/anti-debug
+        // work: the dylib stays mapped but performs ZERO swizzling and ZERO anti-debug, so all
+        // behavioural detection stays clean. Exact bundle-id match only.
+        {
+            static NSSet *appExclude = nil;
+            static dispatch_once_t exOnce;
+            dispatch_once(&exOnce, ^{
+                appExclude = [NSSet setWithArray:@[
+                    @"com.zhiliaoapp.musically",     // TikTok global
+                    @"com.zhiliaoapp.musically.go",  // TikTok Lite
+                    @"com.zhiliao.musically",        // legacy musical.ly
+                    @"com.ss.iphone.ugc.Aweme",      // Douyin
+                ]];
+            });
+            if ([appExclude containsObject:bid]) {
+                return;
+            }
+        }
+
         [[NSFileManager defaultManager] createDirectoryAtPath:VCAM_DIR
             withIntermediateDirectories:YES attributes:nil error:nil];
         vcam_log([NSString stringWithFormat:@"CONSTRUCTOR: proc=%@ bid=%@", proc, bid]);
