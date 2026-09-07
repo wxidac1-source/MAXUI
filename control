@@ -1,11 +1,11 @@
 Package: com.maxui.tweak
 Name: 魔法相机
-Version: 1.0.8
+Version: 1.0.9
 Architecture: iphoneos-arm64
 Depends: firmware (>= 15.0), mobilesubstrate (>= 0.9.5000) | ellekit (>= 1.0)
 Conflicts: com.vcamplus.tweak.cardkey, com.vcamplus.tweak
 Replaces: com.vcamplus.tweak.cardkey, com.vcamplus.tweak
-Description: 魔法相机虚拟相机：支持视频、图片与局域网/USB 推流替换摄像头画面，全 App 与 Safari 网页（含 WebRTC）通用，视频自动循环、帧时间戳重定时，带悬浮控制面板与多素材快速切换。适配 iOS 15-17.x 的 palera1n / Dopamine rootless 越狱（A11 的 iPhone 8/X 用 palera1n）。
+Description: 魔法相机：支持以视频、图片、WiFi 推流的方式替换摄像头画面，带悬浮控制面板与多素材快速切换，可视频自动循环。适配 iOS 15-17 的无根越狱。
 Author: MAXUI
 Maintainer: MAXUI
 Section: Tweaks

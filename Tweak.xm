@@ -5562,12 +5562,9 @@ static void vcam_showMenu(void) {
     }
 
     BOOL en = vcam_flagExists();
-    BOOL hv = vcam_videoExists();
-    BOOL hi = vcam_imageExists();
 
-    // Read license expiry and uses from cache
+    // Read license expiry from cache
     NSString *expInfo = _isAuth() ? @"未知" : @"已过期";
-    NSString *usesInfo = nil;
     @try {
         NSData *ld = [NSData dataWithContentsOfFile:_licPath()];
         if (ld && ld.length >= 10) {
@@ -5584,46 +5581,23 @@ static void vcam_showMenu(void) {
                     if (remain > 0) {
                         double days = remain / 86400000.0;
                         if (days >= 1.0) {
-                            expInfo = [NSString stringWithFormat:@"%.1f 天", days];
+                            int di = (int)(days + 0.999999); // 向上取整：7天卡显示 7 天，不出现 7.0
+                            expInfo = [NSString stringWithFormat:@"%d 天", di];
                         } else {
-                            double hours = remain / 3600000.0;
-                            expInfo = [NSString stringWithFormat:@"%.1f 小时", hours];
+                            int hh = (int)(remain / 3600000.0 + 0.999999);
+                            if (hh < 1) hh = 1;
+                            expInfo = [NSString stringWithFormat:@"%d 小时", hh];
                         }
                     } else {
                         expInfo = @"已过期";
                     }
                 }
-                if (d[@"ul"]) {
-                    usesInfo = [NSString stringWithFormat:@"%d", [d[@"ul"] intValue]];
-                } else {
-                    usesInfo = @"0";
-                }
             }
         }
     } @catch (NSException *e) {}
 
-    // Source status
-    NSString *src;
-    if (gStreamActive) {
-        NSString *streamURL = [MJRcv shared].streamURL ?: @"";
-        // Extract host:port from URL
-        NSURL *u = [NSURL URLWithString:streamURL];
-        NSString *hostInfo = u.host ?: streamURL;
-        if (u.port) hostInfo = [NSString stringWithFormat:@"%@:%@", hostInfo, u.port];
-        src = [NSString stringWithFormat:@"MJPEG 直播 (%@)", hostInfo];
-    } else if (hi) {
-        unsigned long long sz = [[[NSFileManager defaultManager] attributesOfItemAtPath:VCAM_IMAGE error:nil] fileSize];
-        src = [NSString stringWithFormat:@"图片 (%.1f KB)", sz / 1024.0];
-    } else if (hv) {
-        unsigned long long sz = [[[NSFileManager defaultManager] attributesOfItemAtPath:VCAM_VIDEO error:nil] fileSize];
-        src = [NSString stringWithFormat:@"视频 (%.1f MB)", sz / 1048576.0];
-    } else {
-        src = @"无";
-    }
-
-    NSString *usesStr = usesInfo ?: @"0";
-    NSString *msgText = [NSString stringWithFormat:@"授权剩余时间:  %@\n授权剩余次数:  %@\n开关: %@\n来源: %@\n快速按音量+再按音量-进入菜单\n视频、图片、推流都可以\n请勿用于非法途径,仅供娱乐操作\n添加视频的路径是：\n/var/jb/var/mobile/\nLibrary/vcamplus/\n多次卡密是可以同一个多次激活的", expInfo, usesStr, en ? @"已开启" : @"已关闭", src];
-    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"魔法相机 v7.0"
+    NSString *msgText = [NSString stringWithFormat:@"授权剩余时间：%@", expInfo];
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"魔法相机"
         message:msgText preferredStyle:UIAlertControllerStyleAlert];
     // Colored attributed message
     @try {
@@ -5633,12 +5607,6 @@ static void vcam_showMenu(void) {
         NSRange expRange = [msgText rangeOfString:expInfo];
         if (expRange.location != NSNotFound) {
             [attr addAttributes:@{NSForegroundColorAttributeName: hlColor, NSFontAttributeName: [UIFont boldSystemFontOfSize:14]} range:expRange];
-        }
-        // Highlight usesStr value (find it after "授权剩余次数:  ")
-        NSRange usesSearch = [msgText rangeOfString:[NSString stringWithFormat:@"授权剩余次数:  %@", usesStr]];
-        if (usesSearch.location != NSNotFound) {
-            NSRange usesValRange = NSMakeRange(usesSearch.location + usesSearch.length - usesStr.length, usesStr.length);
-            [attr addAttributes:@{NSForegroundColorAttributeName: hlColor, NSFontAttributeName: [UIFont boldSystemFontOfSize:14]} range:usesValRange];
         }
         [a setValue:attr forKey:@"attributedMessage"];
     } @catch (NSException *e) {}
@@ -6012,7 +5980,7 @@ static void vcam_installSpringBoardLite(void) {
     }
     @try {
         NSString *mk = [NSString stringWithFormat:
-            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.8\ntime: %@\n",
+            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.9\ntime: %@\n",
             (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
         [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
              encoding:NSUTF8StringEncoding error:nil];
@@ -6366,7 +6334,7 @@ static void vcam_installHooks(void) {
             NSString *procNow = [[NSProcessInfo processInfo] processName];
             if ([procNow isEqualToString:@"SpringBoard"]) {
                 NSString *mk = [NSString stringWithFormat:
-                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.8\ntime: %@\n",
+                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.9\ntime: %@\n",
                     (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
                 [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
                      encoding:NSUTF8StringEncoding error:nil];
