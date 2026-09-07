@@ -704,20 +704,8 @@ static void _svLC(NSString *key, NSString *hwid, double startMs, double realExp,
     } @catch (NSException *e) {}
 }
 
-// --- Hardening 3: Anti-Debug ---
-#define PT_DENY_ATTACH 31
-
-__attribute__((optnone)) static void _adPtrace(void) {
-    // Devmode: skip PT_DENY_ATTACH so author can attach lldb/Frida to host process
-    NSString *p = [VCAM_DIR stringByAppendingPathComponent:@".devmode"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:p]) return;
-    typedef int (*ptrace_t)(int, pid_t, caddr_t, int);
-    void *h = dlopen(NULL, RTLD_LAZY);
-    if (!h) return;
-    volatile char s[] = {'p','t','r','a','c','e',0};
-    ptrace_t pt = (ptrace_t)dlsym(h, (const char *)s);
-    if (pt) pt(PT_DENY_ATTACH, 0, 0, 0);
-}
+// --- Hardening 3: Anti-Debug (ptrace PT_DENY_ATTACH removed in 1.0.7: it destabilised sandboxed
+// keyboard/web processes and was behaviourally detected by high-detection apps; sysctl checks kept) ---
 
 __attribute__((always_inline)) static BOOL _adSysctl(void) {
     struct kinfo_proc info;
