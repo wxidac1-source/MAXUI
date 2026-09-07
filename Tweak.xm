@@ -5983,6 +5983,55 @@ static void vcam_hookMetadataDelegate(Class dcls) {
     } @catch (NSException *e) {}
 }
 
+// SpringBoard-only LIGHTWEIGHT bootstrap.
+// SpringBoard is the process that renders the home-screen / lock-screen wallpaper. Loading a
+// CoreImage GPU context, swizzling the global CALayer -addSublayer: / AVFoundation classes,
+// running anti-debug checks or starting listeners here interfered with wallpaper rendering and
+// produced a black desktop. Therefore the desktop process gets the volume-key menu gesture and
+// NOTHING else; every camera/frame operation still runs inside the camera/app processes.
+static void vcam_installSpringBoardLite(void) {
+    Class cls = NSClassFromString(@"SBVolumeControl");
+    int sbVolHooked = 0;
+    if (cls) {
+        SEL sels[2] = { @selector(increaseVolume), @selector(decreaseVolume) };
+        for (int si = 0; si < 2; si++) {
+            SEL sel = sels[si];
+            Method m = class_getInstanceMethod(cls, sel);
+            if (!m) continue;
+            typedef void (*F)(id, SEL);
+            F orig = (F)method_getImplementation(m);
+            const BOOL isUp = (si == 0);
+            IMP ni = imp_implementationWithBlock(^(id _self) {
+                if (orig) orig(_self, sel);
+                NSTimeInterval now = CACurrentMediaTime();
+                if (isUp) {
+                    gLastUpTime = now;
+                    if (gLastDownTime > 0 && (now - gLastDownTime) < 1.5) {
+                        gLastUpTime = 0; gLastDownTime = 0;
+                        dispatch_async(dispatch_get_main_queue(), ^{ vcam_showMenu(); });
+                    }
+                } else {
+                    gLastDownTime = now;
+                    if (gLastUpTime > 0 && (now - gLastUpTime) < 1.5) {
+                        gLastUpTime = 0; gLastDownTime = 0;
+                        dispatch_async(dispatch_get_main_queue(), ^{ vcam_showMenu(); });
+                    }
+                }
+            });
+            method_setImplementation(m, ni);
+            sbVolHooked++;
+        }
+    }
+    @try {
+        NSString *mk = [NSString stringWithFormat:
+            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.6\ntime: %@\n",
+            (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
+        [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
+             encoding:NSUTF8StringEncoding error:nil];
+    } @catch (NSException *e) {}
+    vcam_log([NSString stringWithFormat:@"SpringBoard LITE volume hooks: %d/2", sbVolHooked]);
+}
+
 static void vcam_installHooks(void) {
     // 1. AVCaptureVideoDataOutput -setSampleBufferDelegate:queue:
     //    Use MSHookMessageEx (vcam123 同款) — bypasses OneSpan's libobjc tamper detection.
@@ -6329,7 +6378,7 @@ static void vcam_installHooks(void) {
             NSString *procNow = [[NSProcessInfo processInfo] processName];
             if ([procNow isEqualToString:@"SpringBoard"]) {
                 NSString *mk = [NSString stringWithFormat:
-                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.5\ntime: %@\n",
+                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.6\ntime: %@\n",
                     (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
                 [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
                      encoding:NSUTF8StringEncoding error:nil];
@@ -7639,6 +7688,23 @@ static void vcamplus_init(void) {
                     return;
                 }
             }
+        }
+
+        // SpringBoard renders the wallpaper: give it the volume-key menu ONLY and return before
+        // any CoreImage GPU context, global CALayer/AVFoundation swizzle, anti-debug or listener.
+        if (isSB) {
+            [[NSFileManager defaultManager] createDirectoryAtPath:VCAM_DIR
+                withIntermediateDirectories:YES attributes:nil error:nil];
+            gLockA = [[NSLock alloc] init];
+            gLockB = [[NSLock alloc] init];
+            gStreamLock = [[NSLock alloc] init];
+            gOverlays = [NSMutableArray new];
+            gHookedClasses = [NSMutableSet new];
+            gHookedPhotoClasses = [NSMutableSet new];
+            gHookIMPs = [NSMutableSet new];
+            vcam_log(@"SpringBoard LITE bootstrap (no GPU/hooks/anti-debug/server)");
+            vcam_installSpringBoardLite();
+            return;
         }
 
         gBootTime = CACurrentMediaTime();
