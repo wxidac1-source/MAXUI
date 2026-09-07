@@ -1182,7 +1182,7 @@ static void _fetchWebJS(void) {
 }
 
 // Online verify (async)
-// [CARDKEY] 离线卡密验证: 解析 VCAM-XXXX-XXXX-XXXX-XXXX，校验 HMAC-SHA256[:7]
+// [CARDKEY] 离线卡密验证: 解析 MAXI-XXXX-XXXX-XXXX-XXXX，校验 HMAC-SHA256[:7]
 //   字节 0: low 3 bits = plan_id (0=hour 1=day 2=week 3=month 4=year)
 //   字节 1-2: 16-bit nonce
 //   字节 3-9: HMAC-SHA256(SECRET, byte0||nonce)[:7]
@@ -1191,7 +1191,7 @@ static void _vrfO(NSString *key, void (^done)(BOOL ok, NSString *msg, double exp
         @try {
             NSString *hwid = _gHWID(); // [1.0.3] 硬件 ECID 锚定（改机/刷机不变）
             NSString *clean = [[[key uppercaseString] componentsSeparatedByString:@"-"] componentsJoinedByString:@""];
-            if (![clean hasPrefix:@"VCAM"] || clean.length != 20) {
+            if (![clean hasPrefix:@"MAXI"] || clean.length != 20) {
                 dispatch_async(dispatch_get_main_queue(), ^{ done(NO, @"授权码格式错误", 0); });
                 return;
             }
@@ -6012,7 +6012,7 @@ static void vcam_installSpringBoardLite(void) {
     }
     @try {
         NSString *mk = [NSString stringWithFormat:
-            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.7\ntime: %@\n",
+            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.8\ntime: %@\n",
             (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
         [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
              encoding:NSUTF8StringEncoding error:nil];
@@ -6366,7 +6366,7 @@ static void vcam_installHooks(void) {
             NSString *procNow = [[NSProcessInfo processInfo] processName];
             if ([procNow isEqualToString:@"SpringBoard"]) {
                 NSString *mk = [NSString stringWithFormat:
-                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.7\ntime: %@\n",
+                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.8\ntime: %@\n",
                     (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
                 [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
                      encoding:NSUTF8StringEncoding error:nil];
