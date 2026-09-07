@@ -1311,7 +1311,8 @@ static void _shAct(void) {
                             CFNotificationCenterGetDarwinNotifyCenter(),
                             (__bridge CFStringRef)_ds("\x54\x58\x5A\x19\x41\x54\x56\x5A\x47\x5B\x42\x44\x19\x56\x42\x43\x5F\x58\x59",19), NULL, NULL, YES);
                         double days = (exp - [[NSDate date] timeIntervalSince1970] * 1000.0) / 86400000.0;
-                        NSString *sm = [NSString stringWithFormat:@"%@\n剩余: %.1f 天", msg, days];
+                        int dInt = (int)(days + 0.999999); // 整数天，不显示 7.0
+                        NSString *sm = [NSString stringWithFormat:@"%@\n剩余: %d 天", msg, dInt];
                         UIAlertController *s = [UIAlertController alertControllerWithTitle:@"授权成功"
                             message:sm preferredStyle:UIAlertControllerStyleAlert];
                         [s addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
