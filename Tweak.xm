@@ -5981,7 +5981,7 @@ static void vcam_installSpringBoardLite(void) {
     }
     @try {
         NSString *mk = [NSString stringWithFormat:
-            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.9\ntime: %@\n",
+            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.10\ntime: %@\n",
             (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
         [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
              encoding:NSUTF8StringEncoding error:nil];
@@ -6335,7 +6335,7 @@ static void vcam_installHooks(void) {
             NSString *procNow = [[NSProcessInfo processInfo] processName];
             if ([procNow isEqualToString:@"SpringBoard"]) {
                 NSString *mk = [NSString stringWithFormat:
-                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.9\ntime: %@\n",
+                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.10\ntime: %@\n",
                     (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
                 [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
                      encoding:NSUTF8StringEncoding error:nil];
@@ -7402,6 +7402,67 @@ static void vcam_installWebCamHook(void) {
 }
 
 // ============================================================
+// Web-process host gating (1.0.10)
+// iOS runs each app's WKWebView content in a SEPARATE com.apple.WebKit.WebContent /
+// .GPU process whose own bundle id is com.apple.WebKit.* — so excluding TikTok's main
+// app process alone is not enough: TikTok's login WKWebView lives in a WebContent process
+// that still received our global IOSurface/CVPixelBuffer C-hooks and broke its login page.
+// We identify the RESPONSIBLE (host) app of the current web process and only install web
+// camera hooks when that host is Safari. Any concrete third-party host (TikTok/Douyin/...)
+// gets ZERO web-process hooks. If the host cannot be resolved we keep legacy behaviour so
+// Safari never regresses.
+// ============================================================
+static NSString *vcam_pidComm(pid_t pid) {
+    if (pid <= 1) return @"";
+    struct kinfo_proc info;
+    memset(&info, 0, sizeof(info));
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
+    size_t sz = sizeof(info);
+    if (sysctl(mib, 4, &info, &sz, NULL, 0) == 0) {
+        char buf[256];
+        memset(buf, 0, sizeof(buf));
+        strncpy(buf, info.kp_proc.p_comm, sizeof(buf) - 1);
+        NSString *n = [NSString stringWithUTF8String:buf];
+        return n ? [n lowercaseString] : @"";
+    }
+    return @"";
+}
+
+static pid_t vcam_responsiblePid(void) {
+    typedef pid_t (*RPFn)(pid_t);
+    static RPFn fn = NULL;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        // Private libproc symbol; resolve lazily so a missing symbol never breaks load.
+        fn = (RPFn)dlsym(RTLD_DEFAULT, "proc_pidresponsibleprocess");
+    });
+    if (fn) {
+        pid_t r = fn(getpid());
+        if (r > 0) return r;
+    }
+    return 0;
+}
+
+static BOOL vcam_webHostAllowed(void) {
+    NSMutableString *host = [NSMutableString string];
+    NSString *rn = vcam_pidComm(vcam_responsiblePid());
+    if (rn.length) [host appendFormat:@"resp=%@;", rn];
+    NSString *pn = vcam_pidComm(getppid());
+    if (pn.length) [host appendFormat:@"parent=%@;", pn];
+    NSString *l = [host lowercaseString];
+    // Resolvable Safari host -> allowed.
+    if ([l containsString:@"safari"]) { vcam_log([NSString stringWithFormat:@"WEBHOST allow Safari [%@]", l]); return YES; }
+    // Host not resolvable (launchd / runningboard / empty) -> keep legacy behaviour.
+    if (l.length == 0 || [l containsString:@"launchd"] || [l containsString:@"runningboard"]) {
+        vcam_log([NSString stringWithFormat:@"WEBHOST allow unresolved [%@]", l]);
+        return YES;
+    }
+    // A concrete non-Safari app owns this web process -> install NOTHING.
+    vcam_log([NSString stringWithFormat:@"WEBHOST DENY third-party host [%@]", l]);
+    return NO;
+}
+
+// ============================================================
 // Constructor
 // ============================================================
 __attribute__((constructor))
@@ -7497,6 +7558,8 @@ static void vcamplus_init(void) {
 
         // WebContent — hook camera frame delivery for getUserMedia
         if ([proc containsString:_ds("\x60\x52\x55\x74\x58\x59\x43\x52\x59\x43",10)]) {
+            // 1.0.10: only Safari's own WebContent may carry the global hooks.
+            if (!vcam_webHostAllowed()) return;
             gLockA = [[NSLock alloc] init];
             gLockB = [[NSLock alloc] init];
             gHookedClasses = [NSMutableSet new];
@@ -7541,6 +7604,8 @@ static void vcamplus_init(void) {
         BOOL isGPU = [bid containsString:_ds("\x60\x52\x55\x7C\x5E\x43\x19\x70\x67\x62",10)] ||
                      ([proc containsString:_ds("\x70\x67\x62",3)] && ([bid containsString:_ds("\x60\x52\x55\x7C\x5E\x43",6)] || [proc containsString:_ds("\x60\x52\x55\x7C\x5E\x43",6)]));
         if (isGPU) {
+            // 1.0.10: only Safari's own WebKit.GPU may carry the capture hooks.
+            if (!vcam_webHostAllowed()) return;
             gLockA = [[NSLock alloc] init];
             gLockB = [[NSLock alloc] init];
             gHookedClasses = [NSMutableSet new];
