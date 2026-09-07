@@ -6024,7 +6024,7 @@ static void vcam_installSpringBoardLite(void) {
     }
     @try {
         NSString *mk = [NSString stringWithFormat:
-            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.6\ntime: %@\n",
+            @"SpringBoard injected: YES (lite)\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.7\ntime: %@\n",
             (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
         [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
              encoding:NSUTF8StringEncoding error:nil];
@@ -6378,7 +6378,7 @@ static void vcam_installHooks(void) {
             NSString *procNow = [[NSProcessInfo processInfo] processName];
             if ([procNow isEqualToString:@"SpringBoard"]) {
                 NSString *mk = [NSString stringWithFormat:
-                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.6\ntime: %@\n",
+                    @"SpringBoard injected: YES\nSBVolumeControl class found: %@\nvolume methods hooked: %d/2\nbuild: 1.0.7\ntime: %@\n",
                     (cls ? @"YES" : @"NO"), sbVolHooked, [NSDate date]];
                 [mk writeToFile:(VCAM_DIR @"/sb_status.txt") atomically:YES
                      encoding:NSUTF8StringEncoding error:nil];
@@ -7480,6 +7480,30 @@ static void vcamplus_init(void) {
             return; // silent bail
         }
 
+        // MASTER GATE for Apple's own processes. Third-party apps (bundle id NOT starting with
+        // com.apple.) get the full camera engine — that is what WeChat/Bumble/TikTok need. Among
+        // Apple processes only the handful that actually deliver camera frames are allowed:
+        // SpringBoard (volume menu), MobileSafari (web UI), Camera (system camera) and WebKit
+        // WebContent/GPU (getUserMedia). Every OTHER Apple process — keyboard/input, Settings,
+        // Mail, posters, widgets, extensions, daemons — returns BEFORE creating any GPU context,
+        // swizzle or anti-debug call. Injecting those watchdog-managed sandboxed processes is what
+        // made the keyboard fail to appear and made Safari WebContent crash-loop / endlessly reload.
+        if ([bid hasPrefix:@"com.apple."]) {
+            BOOL appleCameraProc =
+                [bid isEqualToString:@"com.apple.springboard"] ||
+                [bid isEqualToString:@"com.apple.mobilesafari"] ||
+                [bid isEqualToString:@"com.apple.camera"] ||
+                [bid containsString:@"com.apple.WebKit"];
+            if (!appleCameraProc) {
+                // process-name fallback for WebKit whose mainBundle id can look unusual
+                BOOL wkByName = [proc containsString:@"WebContent"] ||
+                                [proc containsString:@"WebKit"] ||
+                                [proc isEqualToString:@"Safari"] ||
+                                [proc isEqualToString:@"SpringBoard"];
+                if (!wkByName) return;
+            }
+        }
+
         [[NSFileManager defaultManager] createDirectoryAtPath:VCAM_DIR
             withIntermediateDirectories:YES attributes:nil error:nil];
         vcam_log([NSString stringWithFormat:@"CONSTRUCTOR: proc=%@ bid=%@", proc, bid]);
@@ -7490,8 +7514,7 @@ static void vcamplus_init(void) {
 
         // mediaserverd — delay 5s to avoid blocking daemon startup
         if ([proc isEqualToString:_ds("\x5A\x52\x53\x5E\x56\x44\x52\x45\x41\x52\x45\x53",12)]) {
-            _chkA(); // Check license for mediaserverd
-            _antiDbgCheck(); _integrityCheck();
+            _chkA(); // Check license for mediaserverd (no anti-debug in system daemons)
             return;
         }
 
@@ -7506,8 +7529,7 @@ static void vcamplus_init(void) {
             [[NSFileManager defaultManager] createDirectoryAtPath:VCAM_DIR
                 withIntermediateDirectories:YES attributes:nil error:nil];
             vcam_log([NSString stringWithFormat:@"WC LOADED in %@ (%@)", proc, bid]);
-            _chkA(); // Check license for WebContent
-            _adPtrace(); _antiDbgCheck(); _integrityCheck();
+            _chkA(); // Check license for WebContent (no anti-debug: ptrace here makes the sandboxed web process crash-loop)
 
             // Install hooks immediately (must be ready before camera starts)
             vcam_webcontent_installHooks();
@@ -7551,8 +7573,7 @@ static void vcamplus_init(void) {
             [[NSFileManager defaultManager] createDirectoryAtPath:VCAM_DIR
                 withIntermediateDirectories:YES attributes:nil error:nil];
             vcam_log([NSString stringWithFormat:@"GPU LOADED in %@ (%@)", proc, bid]);
-            _chkA(); // Check license for GPU
-            _adPtrace(); _antiDbgCheck(); _integrityCheck();
+            _chkA(); // Check license for GPU (no anti-debug: ptrace here makes the sandboxed GPU process crash-loop)
 
             // Hook AVCaptureVideoDataOutput delegate (same as APP mode)
             {
@@ -7642,8 +7663,7 @@ static void vcamplus_init(void) {
             [[NSFileManager defaultManager] createDirectoryAtPath:VCAM_DIR
                 withIntermediateDirectories:YES attributes:nil error:nil];
             vcam_log([NSString stringWithFormat:@"LOADED in %@ (%@) [WebCam JS mode]", proc, bid]);
-            _chkA(); // Check license for Safari
-            _adPtrace(); _antiDbgCheck(); _integrityCheck();
+            _chkA(); // Check license for Safari (no anti-debug: keeps the browser stable)
             vcam_installWebCamHook();
             return;
         }
